@@ -1,0 +1,212 @@
+# Evaluation set for the Velora demo domain (fictional data).
+#
+# Fields
+#   id, category, question
+#   expected_facts   list of facts; each fact is a list of accepted spellings (any one counts)
+#   forbidden        strings that must NOT appear (hallucination / wrong action checks)
+#   answerable       false = the correct behaviour is to say "I don't know"
+#   expected_tools   tools a good agent should call (agent mode only)
+#   expected_tool_args  {tool: {argument: value}} that must match (case-insensitive)
+#   expected_sources documents that contain the answer (retrieval check; "models" = specs table)
+#
+# Numbers were computed from data/models.csv and data/kb/*.md - see the comments.
+
+- id: warranty_battery
+  category: doc_lookup
+  question: How long is the battery warranty and what capacity is guaranteed?
+  expected_facts: [["8 years", "8-year", "eight years", "eight-year"], ["160,000", "160000 km"], ["70 %", "70%", "70 percent"]]
+  expected_tools: [search_docs]
+  expected_sources: [warranty]
+
+- id: warranty_transfer
+  category: doc_lookup
+  question: If I sell my Velora, does the warranty transfer to the new owner?
+  expected_facts: [["transfer", "transferred", "passes", "tied to the car"]]
+  expected_tools: [search_docs]
+  expected_sources: [warranty]
+
+- id: wallbox_price
+  category: doc_lookup
+  question: How much does the Velora HomeCharge wallbox cost, and is installation included?
+  expected_facts: [["1,190", "1190"], ["installation"]]
+  expected_tools: [search_docs]
+  expected_sources: [charging]
+
+- id: charge_card_price
+  category: doc_lookup
+  question: What do I pay per kWh with the Velora Charge card?
+  expected_facts: [["0.39", "0,39", "39 cent"]]
+  expected_tools: [search_docs]
+  expected_sources: [charging]
+
+- id: service_interval
+  category: doc_lookup
+  question: How often does a Velora need to be serviced?
+  expected_facts: [["2 years", "two years", "every 2", "24 months"], ["30,000", "30000"]]
+  expected_tools: [search_docs]
+  expected_sources: [service]
+
+- id: home_test_drive
+  category: doc_lookup
+  question: Can I do a test drive at home, where is this possible and what does it cost?
+  expected_facts: [["49"], ["Berlin"], ["Munich"]]
+  expected_tools: [search_docs]
+  expected_sources: [test_drive_and_delivery]
+
+- id: delivery_time
+  category: doc_lookup
+  question: How long is the delivery time after I order a car?
+  expected_facts: [["8 to 12", "8-12", "8–12", "eight to twelve", "8 and 12"]]
+  expected_tools: [search_docs]
+  expected_sources: [test_drive_and_delivery]
+
+- id: pulse_22kw
+  category: doc_lookup
+  question: Can I order the 22 kW onboard charger for the Pulse?
+  expected_facts: [["not available", "not offered", "isn't available", "is not available", "only for the arc", "only available for the arc", "arc and the ridge", "arc and ridge"]]
+  forbidden: ["790 € for the pulse"]
+  expected_tools: [search_docs]
+  expected_sources: [charging]
+
+- id: assist_pro_price
+  category: doc_lookup
+  question: What does Velora Assist Pro cost and what does it add?
+  expected_facts: [["9.90", "9,90"], ["lane change", "lane-change", "lane changes"]]
+  expected_tools: [search_docs]
+  expected_sources: [software_and_app]
+
+- id: data_location
+  category: doc_lookup
+  question: Where is my vehicle and app data stored?
+  expected_facts: [["European Union", "EU"]]
+  expected_tools: [search_docs]
+  expected_sources: [software_and_app]
+
+- id: arc_range
+  category: spec_lookup
+  question: What is the WLTP range of the Arc?
+  expected_facts: [["610"]]
+  expected_tools: [get_model_specs|compare_models]
+  expected_sources: [models]
+
+- id: ridge_seats
+  category: spec_lookup
+  question: How many seats does the Ridge have?
+  expected_facts: [["7", "seven"]]
+  expected_tools: [get_model_specs|compare_models]
+  expected_sources: [models]
+
+- id: pulse_price
+  category: spec_lookup
+  question: What is the price of the Velora Pulse?
+  expected_facts: [["34,900", "34900", "34.900"]]
+  expected_tools: [get_model_specs|compare_models]
+  expected_sources: [models]
+
+- id: longest_range
+  category: comparison
+  question: Which Velora model has the longest range, and how far does it go?
+  expected_facts: [["Arc"], ["610"]]
+  expected_tools: [compare_models|get_model_specs]
+  expected_sources: [models]
+
+- id: max_towing
+  category: comparison
+  question: Which model can tow the most, and how much?
+  expected_facts: [["Ridge"], ["2,000", "2000", "2.000", "2 tonnes", "2 t"]]
+  expected_tools: [compare_models|get_model_specs]
+  expected_sources: [models]
+
+- id: fastest_charging
+  category: comparison
+  question: Which model charges fastest from 10 to 80 percent, and how long does it take?
+  expected_facts: [["Arc"], ["25 min", "25 minutes"]]
+  expected_tools: [compare_models|get_model_specs]
+  expected_sources: [models]
+
+# 529 €/month x 36 months = 19,044 €
+- id: arc_lease_total
+  category: calculation
+  question: What would I pay in total for the private Arc leasing offer over the full term?
+  expected_facts: [["19,044", "19044", "19.044"]]
+  expected_tools: [search_docs, calculate]
+  expected_sources: [leasing]
+
+# 39 €/month x 36 months = 1,404 €
+- id: care_plus_total
+  category: calculation
+  question: How much does Velora Care Plus cost in total over its minimum term?
+  expected_facts: [["1,404", "1404", "1.404"]]
+  expected_tools: [search_docs, calculate]
+  expected_sources: [service]
+
+# 100 kWh x 60 % / 0.9 efficiency = 66.67 kWh x 0.39 €/kWh = 26.00 €
+- id: ridge_charge_cost
+  category: calculation
+  question: Roughly what does it cost to charge a Ridge from 20 % to 80 % with the Velora Charge card?
+  expected_facts: [["26.0", "26,0", "26 €", "26€", "€26", "26 euro", "26 eur"]]
+  expected_tools: [estimate_charging_cost]
+  expected_sources: [models]
+
+# 58 kWh x 70 % / 0.9 = 45.11 kWh x 0.39 €/kWh = 17.59 €
+- id: pulse_charge_cost
+  category: calculation
+  question: How much would it cost to charge a Pulse from 10 % to 80 % at 0.39 € per kWh?
+  expected_facts: [["17.59", "17,59", "17.6"]]
+  expected_tools: [estimate_charging_cost]
+  expected_sources: [models]
+
+# 5,000 km x 0.12 €/km = 600 €
+- id: extra_km
+  category: calculation
+  question: My leasing contract ends and I drove 5,000 km more than agreed. What will that cost?
+  expected_facts: [["600"]]
+  expected_tools: [search_docs, calculate]
+  expected_sources: [leasing]
+
+# 62,900 € + 1,190 € = 64,090 €
+- id: ridge_plus_wallbox
+  category: multi_hop
+  question: What is the total price of a Ridge together with the HomeCharge wallbox?
+  expected_facts: [["64,090", "64090", "64.090"]]
+  expected_tools: [get_model_specs|compare_models, search_docs, calculate]
+  expected_sources: [models, charging]
+
+# 49,900 € + 790 € = 50,690 €
+- id: arc_with_22kw
+  category: multi_hop
+  question: How much is an Arc with the optional 22 kW onboard charger?
+  expected_facts: [["50,690", "50690", "50.690"]]
+  expected_tools: [get_model_specs|compare_models, search_docs, calculate]
+  expected_sources: [models, charging]
+
+- id: book_valid
+  category: action
+  question: Please book me a test drive of the Ridge in Hamburg on 2026-11-20.
+  expected_facts: [["TD-"]]
+  expected_tools: [book_test_drive]
+  expected_tool_args: {book_test_drive: {model: Ridge, city: Hamburg, date_iso: "2026-11-20"}}
+
+- id: book_invalid_city
+  category: action
+  question: Book a test drive of the Pulse in Stuttgart on 2026-11-22.
+  expected_facts: [["no studio", "no velora studio", "not available", "not possible", "isn't possible", "does not have", "doesn't have", "unfortunately", "cannot", "can't"]]
+  forbidden: ["TD-"]
+
+- id: unknown_model
+  category: unanswerable
+  question: What does the Velora Nova cost?
+  answerable: false
+  forbidden: ["nova costs", "nova is priced", "nova starts at"]
+
+- id: hydrogen
+  category: unanswerable
+  question: Does Velora offer a hydrogen fuel-cell version of the Ridge?
+  answerable: false
+  forbidden: ["yes, velora offers", "fuel-cell version is available"]
+
+- id: acceleration
+  category: unanswerable
+  question: How fast does the Arc accelerate from 0 to 100 km/h?
+  answerable: false
+  forbidden: [" seconds"]

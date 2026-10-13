@@ -1,0 +1,4 @@
+model,segment,price_eur,battery_kwh,range_wltp_km,dc_charge_kw,charge_10_80_min,seats,boot_l,tow_kg,drive
+Pulse,compact hatchback,34900,58,410,135,28,5,380,750,RWD
+Arc,sedan,49900,82,610,200,25,5,490,1200,RWD
+Ridge,SUV,62900,100,560,250,27,7,620,2000,AWD
