@@ -70,7 +70,7 @@ def _cmd_eval(a: argparse.Namespace) -> int:
         cases = cases[: a.limit]
     print(f"Running {len(cases)} cases x {len(models)} model(s) x {len(a.modes)} mode(s)")
     scores, records = run_eval(models, cases, a.modes, judge_model=judge,
-                               rag_k=a.rag_k, max_steps=a.max_steps)
+                               rag_k=a.rag_k, max_steps=a.max_steps, nudge=not a.no_nudge)
     out = save_results(a.out, scores, records)
     report = write_report(scores, out, title=a.title,
                           notes=f"Provider: `{a.provider}` · cases: {len(cases)} · "
@@ -99,6 +99,8 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--limit", type=int, default=None)
     ev.add_argument("--rag-k", type=int, default=4)
     ev.add_argument("--max-steps", type=int, default=6)
+    ev.add_argument("--no-nudge", action="store_true",
+                    help="agent: no reminder when it answers without using a tool (v1 behaviour)")
     ev.add_argument("--judge-model", default=None, help="optional LLM-as-judge model")
     ev.add_argument("--judge-provider", default=None)
     ev.add_argument("--out", default="outputs/eval")

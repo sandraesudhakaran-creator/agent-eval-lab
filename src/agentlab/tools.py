@@ -46,10 +46,14 @@ def _arg_docs(doc: str) -> dict[str, str]:
     out: dict[str, str] = {}
     m = re.search(r"Args:\s*\n(.*?)(?:\n\s*\n|\Z)", doc or "", re.S)
     if m:
+        last, indent = None, 0
         for line in m.group(1).splitlines():
             mm = re.match(r"\s*(\w+)\s*(?:\(.*?\))?:\s*(.+)", line)
-            if mm:
-                out[mm.group(1)] = mm.group(2).strip()
+            if mm and (last is None or len(line) - len(line.lstrip()) <= indent):
+                last, indent = mm.group(1), len(line) - len(line.lstrip())
+                out[last] = mm.group(2).strip()
+            elif last and line.strip():  # continuation line of the previous argument
+                out[last] += " " + line.strip()
     return out
 
 
@@ -81,6 +85,24 @@ class Tool:
     def schema(self) -> dict:
         return {"type": "function", "function": {
             "name": self.name, "description": self.description, "parameters": self.parameters}}
+
+
+def _coerce(value: Any, schema: dict) -> Any:
+    """Convert values that models often send with the wrong JSON type (e.g. "20" for 20)."""
+    kind = schema.get("type")
+    try:
+        if kind == "integer" and isinstance(value, (str, float)):
+            f = float(value)
+            return int(f) if f.is_integer() else f
+        if kind == "number" and isinstance(value, str):
+            return float(value.replace(",", "."))
+        if kind == "boolean" and isinstance(value, str):
+            return value.strip().lower() in ("true", "1", "yes")
+        if kind == "string" and isinstance(value, (int, float)):
+            return str(value)
+    except ValueError:
+        pass
+    return value
 
 
 class ToolRegistry:
@@ -121,8 +143,11 @@ class ToolRegistry:
         unknown = set(arguments) - allowed
         missing = [p for p in tool.parameters["required"] if p not in arguments]
         if unknown or missing:
+            example = {p: "..." for p in tool.parameters["required"]}
             return (f"ERROR: invalid arguments for {name}. Missing: {missing or 'none'}; "
-                    f"unknown: {sorted(unknown) or 'none'}. Expected: {sorted(allowed)}")
+                    f"unknown: {sorted(unknown) or 'none'}. Expected: {sorted(allowed)}. "
+                    f"Call {name} again, e.g. with {json.dumps(example)}.")
+        arguments = {k: _coerce(v, tool.parameters["properties"][k]) for k, v in arguments.items()}
         try:
             result = tool.func(**arguments)
         except Exception as exc:  # report to the model, don't crash the agent

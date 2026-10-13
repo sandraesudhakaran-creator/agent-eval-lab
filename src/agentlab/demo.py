@@ -14,12 +14,15 @@ import operator
 import re
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 from agentlab.rag import BM25Index, load_markdown_dir
 from agentlab.tools import ToolRegistry
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
+Attribute = Literal["price_eur", "battery_kwh", "range_wltp_km", "dc_charge_kw",
+                    "charge_10_80_min", "seats", "boot_l", "tow_kg"]
 STUDIOS = ["Berlin", "Hamburg", "Munich", "Cologne", "Frankfurt"]
 CHARGING_EFFICIENCY = 0.90  # share of grid energy that ends up in the battery
 
@@ -125,12 +128,14 @@ class VeloraDomain:
             return dom._model(model)
 
         @reg.tool
-        def compare_models(attribute: str, models: list[str] | None = None) -> dict:
-            """Compare one attribute across Velora models, sorted from highest to lowest.
+        def compare_models(attribute: Attribute, models: list[str] | None = None) -> dict:
+            """Compare one attribute across Velora models, sorted from highest to lowest
+            (for charge_10_80_min the fastest model is the one with the lowest value).
 
             Args:
-                attribute: Column to compare, e.g. price_eur, range_wltp_km, battery_kwh,
-                    dc_charge_kw, charge_10_80_min, seats, boot_l, tow_kg.
+                attribute: price_eur, battery_kwh, range_wltp_km, dc_charge_kw,
+                    charge_10_80_min (fast-charging time 10-80 % in minutes), seats,
+                    boot_l (boot volume in litres) or tow_kg (towing capacity in kg).
                 models: Models to include; all models if omitted.
             """
             rows = [dom._model(m) for m in (models or list(dom.models))]
@@ -160,7 +165,9 @@ class VeloraDomain:
                 model: Model name: Pulse, Arc or Ridge.
                 start_percent: Battery level before charging, 0-100.
                 end_percent: Battery level after charging, 0-100.
-                price_per_kwh: Electricity price in euros per kWh (default: Velora Charge card).
+                price_per_kwh: Electricity price in euros per kWh. Leave it out to use the
+                    Velora Charge card price of 0.39; only set it if the user gives a
+                    different price.
             """
             m = dom._model(model)
             if not 0 <= start_percent < end_percent <= 100:

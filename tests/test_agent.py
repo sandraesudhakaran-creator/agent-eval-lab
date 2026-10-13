@@ -127,3 +127,25 @@ def test_openai_compatible_client_end_to_end(dom):
     first_body, auth = _FakeOpenAI.requests_seen[0]
     assert auth == "Bearer secret" and first_body["tools"][0]["type"] == "function"
     assert first_body["model"] == "fake-model" and first_body["temperature"] == 0.0
+
+
+def test_agent_nudges_once_when_no_tool_was_used(dom):
+    model = ScriptedModel([
+        LLMResponse(content="I don't know. Let me search the documents."),
+        LLMResponse(tool_calls=[ToolCall("search_docs", {"query": "wallbox price"})]),
+        LLMResponse(content="It costs 1,190 € [charging]."),
+    ])
+    res = ToolAgent(model, dom.registry, AGENT_PROMPT).run("Wallbox price?")
+    assert res.nudged and res.answer == "It costs 1,190 € [charging]."
+    assert model.calls[1][0][-1]["content"] == ToolAgent.NUDGE
+
+    # without the nudge (v1 behaviour) the first reply is final
+    model = ScriptedModel([LLMResponse(content="I don't know.")])
+    res = ToolAgent(model, dom.registry, AGENT_PROMPT, nudge=False).run("Wallbox price?")
+    assert not res.nudged and res.answer == "I don't know."
+
+
+def test_agent_nudge_is_given_only_once(dom):
+    model = ScriptedModel([LLMResponse(content="No idea."), LLMResponse(content="Still no idea.")])
+    res = ToolAgent(model, dom.registry, AGENT_PROMPT).run("q")
+    assert res.answer == "Still no idea." and len(model.calls) == 2

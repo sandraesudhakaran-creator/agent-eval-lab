@@ -40,6 +40,7 @@ class RunResult:
     sources: list[str] = field(default_factory=list)
     stopped: str = "answered"    # answered | max_steps | error
     error: str = ""
+    nudged: bool = False         # agent got the "use a tool" reminder
 
     @property
     def tool_calls(self) -> list[TraceStep]:
@@ -61,6 +62,7 @@ class RunResult:
         return {
             "question": self.question, "answer": self.answer, "mode": self.mode,
             "stopped": self.stopped, "error": self.error, "sources": self.sources,
+            "nudged": self.nudged,
             "steps": [s.__dict__ for s in self.steps],
         }
 
@@ -140,10 +142,14 @@ class ToolAgent:
 
     mode = "agent"
 
+    NUDGE = ("You answered without using any tool. Do not guess and do not announce a search: "
+             "call the tool that can check this now, then answer from its result.")
+
     def __init__(self, model: ChatModel, registry: ToolRegistry, system_prompt: str,
-                 max_steps: int = 6) -> None:
+                 max_steps: int = 6, nudge: bool = True) -> None:
         self.model, self.registry = model, registry
         self.system_prompt, self.max_steps = system_prompt, max_steps
+        self.nudge = nudge
 
     def run(self, question: str) -> RunResult:
         msgs: list[dict] = [{"role": "system", "content": self.system_prompt},
@@ -155,6 +161,13 @@ class ToolAgent:
                 resp = self.model.chat(msgs, tools=schemas)
                 res.steps.append(_llm_step(self.model, resp))
                 if not resp.tool_calls:
+                    if self.nudge and not res.tool_calls and not res.nudged:
+                        # Small models often answer from memory or say "let me search"
+                        # without calling anything: give them one explicit reminder.
+                        res.nudged = True
+                        msgs += [{"role": "assistant", "content": resp.content or ""},
+                                 {"role": "user", "content": self.NUDGE}]
+                        continue
                     res.answer = resp.content.strip()
                     return res
                 msgs.append({"role": "assistant", "content": resp.content or "", "tool_calls": [

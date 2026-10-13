@@ -113,3 +113,35 @@ def test_safe_eval_blocks_code():
     for bad in ["__import__('os')", "open('x')", "a + 1"]:
         with pytest.raises(ValueError):
             safe_eval(bad)
+
+
+def test_arguments_are_coerced_to_schema_types(dom):
+    out = dom.registry.call("estimate_charging_cost", {
+        "model": "Ridge", "start_percent": "20", "end_percent": "80", "price_per_kwh": "0,39"})
+    assert '"cost_eur": 26.0' in out
+
+
+def test_compare_models_attribute_is_an_enum(dom):
+    schema = next(s for s in dom.registry.schemas() if s["function"]["name"] == "compare_models")
+    attr = schema["function"]["parameters"]["properties"]["attribute"]
+    assert "tow_kg" in attr["enum"] and "model" not in attr["enum"]
+
+
+def test_argument_error_shows_example_call(dom):
+    out = dom.registry.call("search_docs", {"service": "HomeCharge"})
+    assert 'Call search_docs again, e.g. with {"query": "..."}' in out
+
+
+def test_multiline_argument_docs_are_joined():
+    def f(a: str, b: int = 1) -> None:
+        """Do it.
+
+        Args:
+            a: First line
+                continues here.
+            b: Second.
+        """
+
+    props = Tool.from_function(f).parameters["properties"]
+    assert props["a"]["description"] == "First line continues here."
+    assert props["b"]["description"] == "Second."

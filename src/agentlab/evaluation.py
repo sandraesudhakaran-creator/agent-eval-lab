@@ -190,13 +190,13 @@ def judge(judge_model: ChatModel, case: Case, answer: str) -> bool:
 # --- running -------------------------------------------------------------------------------
 
 def build_pipeline(mode: str, model: ChatModel, domain: VeloraDomain, rag_k: int = 4,
-                   max_steps: int = 6):
+                   max_steps: int = 6, nudge: bool = True):
     if mode == "llm_only":
         return LLMOnly(model, SYSTEM_PROMPT)
     if mode == "rag":
         return RAGPipeline(model, domain.index, SYSTEM_PROMPT, k=rag_k)
     if mode == "agent":
-        return ToolAgent(model, domain.registry, AGENT_PROMPT, max_steps=max_steps)
+        return ToolAgent(model, domain.registry, AGENT_PROMPT, max_steps=max_steps, nudge=nudge)
     raise ValueError(f"unknown mode {mode!r}; choose from {MODES}")
 
 
@@ -208,6 +208,7 @@ def run_eval(
     judge_model: ChatModel | None = None,
     rag_k: int = 4,
     max_steps: int = 6,
+    nudge: bool = True,
     log: Callable[[str], None] = print,
 ) -> tuple[list[Score], list[dict]]:
     """Run all cases; returns scores and full run records (with traces)."""
@@ -215,7 +216,7 @@ def run_eval(
     scores, records = [], []
     for model in models:
         for mode in modes:
-            pipe = build_pipeline(mode, model, domain, rag_k, max_steps)
+            pipe = build_pipeline(mode, model, domain, rag_k, max_steps, nudge)
             n_pass = 0
             for case in cases:
                 domain.bookings.clear()
