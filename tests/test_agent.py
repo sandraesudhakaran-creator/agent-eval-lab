@@ -149,3 +149,16 @@ def test_agent_nudge_is_given_only_once(dom):
     model = ScriptedModel([LLMResponse(content="No idea."), LLMResponse(content="Still no idea.")])
     res = ToolAgent(model, dom.registry, AGENT_PROMPT).run("q")
     assert res.answer == "Still no idea." and len(model.calls) == 2
+
+
+def test_check_connection_fails_fast():
+    model = OpenAICompatibleModel("m", "http://127.0.0.1:9/v1")  # nothing listens on port 9
+    with pytest.raises(RuntimeError, match="Cannot reach"):
+        model.check_connection()
+
+
+def test_cli_eval_stops_when_server_is_down(tmp_path):
+    from agentlab.cli import main
+    with pytest.raises(SystemExit, match="Cannot reach"):
+        main(["eval", "--base-url", "http://127.0.0.1:9/v1", "--model", "m",
+              "--out", str(tmp_path / "x")])

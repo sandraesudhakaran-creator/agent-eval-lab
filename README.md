@@ -44,31 +44,71 @@ The demo domain is a customer assistant for **Velora Motors, a fictional electri
   - latency and token cost
 
   An optional LLM-as-judge adds a second opinion.
-- **Robustness for small models.** If a model writes a tool call as JSON text instead of using the native tool field, the call is recovered. Rate limits are retried with back-off.
+- **Robustness for small models.** The agent handles several ways small models go wrong:
+  - a tool call written as JSON text instead of the native tool field is recovered
+  - arguments with the wrong type are converted
+  - the agent gets one reminder when it answers without checking anything
+  - rate limits are retried with back-off
+  - an unreachable model server stops the run immediately with a clear message
 
 ## Results
 
-> **TODO: fill in after running the Colab notebook (section 8).** Replace every `…` with the measured value. Do not keep any placeholder.
+Two open models ran on a free Colab T4 GPU through Ollama: **Llama 3.1 8B** and **Qwen 2.5 7B**. Every run used the same 28 test cases, temperature 0, and the same prompts and tools.
+
+<p align="center"><img src="docs/img/results_overview.png" width="80%"></p>
 
 | model | mode | pass rate | tool recall | tool precision | refusal accuracy | mean latency | mean tokens |
 |---|---|---:|---:|---:|---:|---:|---:|
-| qwen2.5:7b | llm_only | … | – | – | … | … | … |
-| qwen2.5:7b | rag | … | – | – | … | … | … |
-| qwen2.5:7b | agent | … | … | … | … | … | … |
-| llama3.1:8b | llm_only | … | – | – | … | … | … |
-| llama3.1:8b | rag | … | – | – | … | … | … |
-| llama3.1:8b | agent | … | … | … | … | … | … |
+| llama3.1:8b | plain LLM | 18 % | – | – | 33 % | 3.5 s | 156 |
+| llama3.1:8b | RAG | 57 % | – | – | 100 % | 1.0 s | 379 |
+| llama3.1:8b | agent v1 | 79 % | 0.90 | 1.00 | 67 % | 2.9 s | 1,351 |
+| llama3.1:8b | **agent v2** | **86 %** | 0.90 | 1.00 | 67 % | 2.9 s | 1,397 |
+| qwen2.5:7b | plain LLM | 11 % | – | – | 67 % | 1.4 s | 162 |
+| qwen2.5:7b | RAG | 54 % | – | – | 100 % | 1.5 s | 408 |
+| qwen2.5:7b | agent v1 | 46 % | 0.44 | 0.54 | 100 % | 2.4 s | 1,655 |
+| qwen2.5:7b | **agent v2** | **79 %** | 0.88 | 1.00 | 67 % | 3.8 s | 2,792 |
 
-Add `docs/img/pass_rate_by_category.png` and 2–3 sentences on what you observed: where the agent helps, where it fails, and what it costs in latency and tokens.
+Pass rate by category:
 
-**Baseline without an LLM.** This one is measured, and CI runs it on every push. The extractive baseline returns the best-matching passage.
+| run | doc lookup | spec lookup | comparison | calculation | multi-step | action | unanswerable |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| llama3.1:8b / RAG | 100 % | 0 % | 0 % | 60 % | 0 % | 0 % | 100 % |
+| llama3.1:8b / agent v2 | 100 % | 100 % | 100 % | 80 % | 0 % | 100 % | 67 % |
+| qwen2.5:7b / RAG | 100 % | 0 % | 0 % | 40 % | 0 % | 0 % | 100 % |
+| qwen2.5:7b / agent v2 | 100 % | 100 % | 67 % | 80 % | 0 % | 50 % | 67 % |
+
+### What the results show
+
+- **Without company data, both models mostly guess.** They pass 11–18 % of the cases and invent prices and figures, for example an acceleration time for a car whose data contains none.
+- **RAG solves the document questions** (100 %) and is the cheapest setup: about 400 tokens per question. It cannot answer questions that need the product table, exact arithmetic or an action.
+- **The agent is the strongest setup** at 86 % with Llama, but it costs 3.7× (Llama) to 6.8× (Qwen) more tokens per question than RAG. Whether that is worth it depends on how many questions need data, calculations or actions.
+- **The agent also hallucinates more on unanswerable questions.** Its refusal accuracy is 67 %, against 100 % for RAG. With tools available, the models feel encouraged to produce an answer. In one case Llama invented "4.8 seconds" and cited a tool result that contains no acceleration value.
+- **Both models fail the two multi-step price questions** (car price plus an accessory from the documents). They either mix up the leasing rate with the purchase price or stop after the first lookup.
+
+### Iteration: from v1 to v2
+
+Reading the step-by-step traces of the failed v1 cases (`runs.jsonl`) showed five patterns. Most of them were problems with the tool design, not with the models:
+
+| v1 failure seen in the traces | v2 change |
+|---|---|
+| Qwen wrote "Let me search the documents…" and stopped without calling a tool (7 cases) | One reminder if the agent answers without having used any tool |
+| `compare_models` was called with invented names such as `towing_capacity` | The allowed attribute names are now an enum in the tool schema |
+| Numbers were sent as text (`"20"`, `"0.25"`) and the tool crashed | Arguments are converted to the types in the schema |
+| Models invented an electricity price instead of using the default | The parameter description says when to leave it out |
+| A wrong argument name made the model give up | The error message now shows an example of a correct call |
+
+The test cases were not changed between v1 and v2. **Qwen improved from 46 % to 79 % (13 → 22 cases)**, mainly through the reminder: document questions went from 30 % to 100 %. **Llama went from 79 % to 86 % (22 → 24 cases)**, a difference of two cases, which is within the noise of a set this small.
+
+Caveat: the v2 changes were designed after looking at failures on this same test set. The fixes are generic (schemas, type handling, a reminder), but a new, held-out set of questions would be needed to confirm the gain without bias.
+
+### Baseline without an LLM
+
+CI runs this baseline on every push. The extractive baseline returns the best-matching passage:
 
 | run | pass rate | what it shows |
 |---|---:|---|
-| baseline, `llm_only` | 11 % (3/28) | It always says it doesn't know, which passes only the 3 unanswerable cases |
-| baseline, `rag` | 39 % (11/28) | Retrieval alone answers all 10 document questions, but nothing that needs product data, maths or an action |
-
-Any LLM configuration has to beat these numbers to justify its cost.
+| baseline, `llm_only` | 11 % (3/28) | Always says it doesn't know, so only the 3 unanswerable cases pass |
+| baseline, `rag` | 39 % (11/28) | Retrieval alone answers all 10 document questions and nothing else |
 
 ## How it works
 
@@ -145,7 +185,7 @@ src/agentlab/
   report.py      Markdown report and chart
   cli.py         agentlab ask / agentlab eval
 data/            knowledge base, product table, evaluation cases (all fictional)
-tests/           35 tests, including a local fake OpenAI server for the HTTP client
+tests/           43 tests, including a local fake OpenAI server for the HTTP client
 ```
 
 ## Limitations

@@ -63,6 +63,12 @@ def _cmd_eval(a: argparse.Namespace) -> int:
     models = [make_model(a.provider, n, a.base_url, a.temperature) for n in names]
     judge = (make_model(a.judge_provider or a.provider, a.judge_model, None, 0.0)
              if a.judge_model else None)
+    for m in models + ([judge] if judge else []):
+        if hasattr(m, "check_connection"):
+            try:
+                m.check_connection()
+            except RuntimeError as exc:
+                raise SystemExit(f"Error: {exc}") from None
     cases = load_cases(a.cases)
     if a.categories:
         cases = [c for c in cases if c.category in a.categories]

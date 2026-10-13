@@ -113,6 +113,17 @@ class OpenAICompatibleModel:
             raise RuntimeError(f"Set the {key_env} environment variable for provider {provider!r}")
         return cls(model=model, base_url=base_url, api_key=api_key, **kw)
 
+    def check_connection(self) -> None:
+        """Fail fast with a clear message if the endpoint is unreachable."""
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        try:
+            r = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Cannot reach {self.base_url} - is the model server running? "
+                               f"({type(exc).__name__})") from exc
+        if r.status_code in (401, 403):
+            raise RuntimeError(f"{self.base_url} rejected the API key (HTTP {r.status_code})")
+
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> LLMResponse:
         payload: dict[str, Any] = {
             "model": self.model, "messages": messages, "temperature": self.temperature,
